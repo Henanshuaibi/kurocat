@@ -79,7 +79,7 @@ let settings: AppSettings = {
   showKeyBubbles: true,
   soundEnabled: true,
   autostart: false,
-  catBreed: 'black',
+  catBreed: 'monokuma',
   mcpEnabled: true,
   mcpPort: 27420,
   keyboardLayout: '65',
@@ -110,7 +110,9 @@ function renderBreedPills(): void {
     btn.dataset.breed = cat.id;
     const emoji = cat.emoji ? `${cat.emoji} ` : '🐱 ';
     btn.textContent = `${emoji}${cat.name}`;
-    const accent = cat.accentColor || (cat.id === 'ragdoll' ? '#7ac7ff' : '#c8f538');
+    const accent =
+      cat.accentColor ||
+      (cat.id === 'monokuma' ? '#E60012' : cat.id === 'ragdoll' ? '#7ac7ff' : '#c8f538');
     btn.style.setProperty('--pill-accent', accent);
     btn.classList.toggle('active', cat.id === settings.catBreed);
     breedPillsEl.appendChild(btn);
@@ -166,7 +168,7 @@ function syncMenuUI(): void {
   }
 
   engine.showKeyBubbles = settings.showKeyBubbles;
-  engine.setCatAppearance(activeCat?.id || 'black', activeCat);
+  engine.setCatAppearance(activeCat?.id || 'monokuma', activeCat);
   engine.setKeyboardConfig(kbLayout, kbOrient);
   if (!sliderDragging) {
     engine.setRenderScale(settings.scale);

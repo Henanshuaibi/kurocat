@@ -225,7 +225,7 @@ fn update_settings(app: AppHandle, state: State<'_, AppState>, mut patch: AppSet
     patch.cat_breed = if cat_exists(&clean_breed) {
         clean_breed
     } else {
-        "black".to_string()
+        "monokuma".to_string()
     };
     if patch.mcp_port == 0 {
         patch.mcp_port = 27420;
@@ -347,7 +347,7 @@ pub fn apply_breed_and_save(app: &AppHandle, breed: &str) {
     let normalized = if cat_exists(&clean) {
         clean
     } else {
-        "black".to_string()
+        "monokuma".to_string()
     };
     let state = app.state::<AppState>();
     let updated = {

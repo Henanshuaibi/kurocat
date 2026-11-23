@@ -112,7 +112,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "switch_cat",
-            "description": "Switch the active cat displayed on the user's Windows desktop by ID (e.g. 'black', 'ragdoll', or any custom cat ID).",
+            "description": "Switch the active cat displayed on the user's Windows desktop by ID (e.g. 'monokuma', 'black', 'ragdoll', 'dafeiyu', or any custom cat ID).",
             "inputSchema": {
                 "type": "object",
                 "required": ["id"],
@@ -250,7 +250,7 @@ fn execute_tool(name: &str, args: &Value, on_change: &dyn Fn()) -> Value {
                     if removed {
                         let mut s = load_settings();
                         if s.cat_breed == id && !cat_exists(&id) {
-                            s.cat_breed = "black".to_string();
+                            s.cat_breed = "monokuma".to_string();
                             save_settings(&s);
                         }
                         on_change();

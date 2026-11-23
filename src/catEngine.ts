@@ -10,10 +10,11 @@ import {
 import { catAudio } from './audio';
 import { resolveCustomSkin, type CatSkinConfig, type ResolvedSkin } from './catSkins';
 import { DaFeiYuRenderer, type DaFeiYuLayout } from './dafeiyuRenderer';
+import { MonokumaRenderer, DESPAIR_RED, DESPAIR_RED_DARK } from './monokumaRenderer';
 
 export const LOGICAL_W = 420;
 export const LOGICAL_H = 440;
-export type CatBreed = 'black' | 'ragdoll' | 'dafeiyu';
+export type CatBreed = 'black' | 'ragdoll' | 'dafeiyu' | 'monokuma';
 export type KeyboardOrientation = 'cat' | 'viewer';
 
 interface Vec2 {
@@ -92,13 +93,14 @@ export class KuroCatEngine {
   public showKeyBubbles = true;
   public privacyMode = false;
   public onAfterRender: (() => void) | null = null;
-  public catBreed: CatBreed = 'black';
+  public catBreed: CatBreed = 'monokuma';
   public customSkin: ResolvedSkin | null = null;
   public keyboardLayout: KeyboardLayoutId = '65';
   public keyboardOrientation: KeyboardOrientation = 'cat';
   private renderScale = 1.0;
   private embedded = false;
   private dafeiyu = new DaFeiYuRenderer();
+  private monokuma = new MonokumaRenderer();
   private privacyClose = 0;
   private privacyTypingAt = -10000;
   private lastMouseNX = 0.5;
@@ -107,6 +109,7 @@ export class KuroCatEngine {
   public setPrivacyMode(active: boolean): void {
     this.privacyMode = active;
     this.dafeiyu.onPrivacyModeChanged(active);
+    this.monokuma.onPrivacyModeChanged(active);
     if (active) {
       this.bubbles.length = 0;
       for (const anim of this.keyAnims.values()) {
@@ -120,6 +123,8 @@ export class KuroCatEngine {
     this.privacyTypingAt = performance.now();
     if (this.catBreed === 'dafeiyu') {
       this.dafeiyu.onPrivacyTyping();
+    } else if (this.catBreed === 'monokuma') {
+      this.monokuma.onPrivacyTyping();
     }
   }
 
@@ -132,7 +137,7 @@ export class KuroCatEngine {
   }
 
   private syncLayoutPositions(): void {
-    const isBigFish = this.catBreed === 'dafeiyu';
+    const isSpriteCompanion = this.catBreed === 'dafeiyu' || this.catBreed === 'monokuma';
     if (this.keyboardLayout === '108') {
       this.logicalW = 540;
       this.logicalH = 456;
@@ -144,26 +149,29 @@ export class KuroCatEngine {
       this.kbWidth = 398;
       this.kbHeight = 96;
       this.kbTiltRad = (2.4 * Math.PI) / 180;
-      this.mouseBaseX = isBigFish ? 54 : 46;
-      this.mouseBaseY = isBigFish ? 332 : 342;
+      this.mouseBaseX = isSpriteCompanion ? 54 : 46;
+      this.mouseBaseY = isSpriteCompanion ? 332 : 342;
     } else {
       this.logicalW = 420;
       this.logicalH = 440;
       this.catCenterX = 196;
       this.catTopY = 82;
       this.catBaseY = 308;
-      this.kbCenterX = isBigFish ? 234 : 214;
+      this.kbCenterX = isSpriteCompanion ? 234 : 214;
       this.kbCenterY = 353;
       this.kbWidth = 266;
       this.kbHeight = 74;
       this.kbTiltRad = (3.4 * Math.PI) / 180;
-      this.mouseBaseX = isBigFish ? 72 : 46;
-      this.mouseBaseY = isBigFish ? 322 : 338;
+      this.mouseBaseX = isSpriteCompanion ? 72 : 46;
+      this.mouseBaseY = isSpriteCompanion ? 322 : 338;
     }
   }
 
   public setCatAppearance(breedId: string, skin?: CatSkinConfig | null): void {
-    if (breedId === 'dafeiyu') {
+    if (breedId === 'monokuma') {
+      this.catBreed = 'monokuma';
+      this.customSkin = null;
+    } else if (breedId === 'dafeiyu') {
       this.catBreed = 'dafeiyu';
       this.customSkin = null;
     } else if ((breedId === 'black' || breedId === 'ragdoll') && (!skin || skin.builtin)) {
@@ -173,7 +181,7 @@ export class KuroCatEngine {
       this.catBreed = 'black';
       this.customSkin = resolveCustomSkin(skin);
     } else {
-      this.catBreed = 'black';
+      this.catBreed = 'monokuma';
       this.customSkin = null;
     }
     this.syncLayoutPositions();
@@ -359,6 +367,7 @@ export class KuroCatEngine {
       smears: [],
     };
 
+    this.syncLayoutPositions();
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -454,6 +463,18 @@ export class KuroCatEngine {
 
     this.bodyBob = Math.min(1.15, this.bodyBob + 0.65);
     this.kbBounce = Math.min(1, this.kbBounce + 0.45);
+
+    if (this.catBreed === 'monokuma') {
+      const pt = this.getKeyWorldCenter(spec);
+      this.monokuma.onKeyDown(vk, pt, this.buildDaFeiYuLayout(), repeat);
+      if (this.showKeyBubbles) {
+        const label = formatBubbleForVk(vk, spec);
+        if (label) {
+          this.spawnBubble(label, spec.id === 'space', pt.x, now);
+        }
+      }
+      return;
+    }
 
     if (this.catBreed === 'dafeiyu') {
       const pt = this.getKeyWorldCenter(spec);
@@ -562,6 +583,7 @@ export class KuroCatEngine {
 
   public onKeyUp(vk: number): void {
     this.dafeiyu.onKeyUp(vk);
+    this.monokuma.onKeyUp(vk);
     if (this.privacyMode) return;
     const spec = resolveKeyByVk(vk, this.keyboardLayout);
     if (!spec) return;
@@ -572,8 +594,9 @@ export class KuroCatEngine {
   public onGlobalMouseMove(nx: number, ny: number): void {
     const now = performance.now();
     this.lastMouseNX = nx;
-    this.mouseTargetOffsetX = (nx - 0.5) * (this.catBreed === 'dafeiyu' ? 14 : 28);
-    this.mouseTargetOffsetY = (ny - 0.5) * (this.catBreed === 'dafeiyu' ? 11 : 20);
+    const isSpriteCompanion = this.catBreed === 'dafeiyu' || this.catBreed === 'monokuma';
+    this.mouseTargetOffsetX = (nx - 0.5) * (isSpriteCompanion ? 14 : 28);
+    this.mouseTargetOffsetY = (ny - 0.5) * (isSpriteCompanion ? 11 : 20);
     this.lastMouseMoveAt = now;
 
     this.leftPaw.mode = 'mouse';
@@ -581,6 +604,9 @@ export class KuroCatEngine {
   }
 
   private getMouseButtonColors(): { left: string; right: string; middle: string } {
+    if (!this.customSkin && this.catBreed === 'monokuma') {
+      return { left: DESPAIR_RED, right: '#58c7ff', middle: DESPAIR_RED_DARK };
+    }
     const primary = this.customSkin
       ? this.customSkin.accentColor
       : this.catBreed === 'dafeiyu'
@@ -653,6 +679,7 @@ export class KuroCatEngine {
 
     this.lastMouseMoveAt = now;
     this.dafeiyu.resetLeftHandForMouse();
+    this.monokuma.resetLeftHandForMouse();
     this.leftPaw.mode = 'mouse';
     this.leftPaw.impactSquash = 0.72;
     this.leftPaw.lastActiveAt = now;
@@ -669,6 +696,7 @@ export class KuroCatEngine {
     this.mouseScrollFlash = 1;
     this.lastMouseMoveAt = now;
     this.dafeiyu.resetLeftHandForMouse();
+    this.monokuma.resetLeftHandForMouse();
     this.leftPaw.mode = 'mouse';
     this.leftPaw.lastActiveAt = now;
   }
@@ -879,6 +907,8 @@ export class KuroCatEngine {
     catAudio.setPurrIntensity(!this.privacyMode && this.squintAmount > 0.25 ? this.squintAmount : 0);
     if (this.catBreed === 'dafeiyu') {
       this.dafeiyu.update(dt, now, this.buildDaFeiYuLayout());
+    } else if (this.catBreed === 'monokuma') {
+      this.monokuma.update(dt, now, this.buildDaFeiYuLayout());
     }
 
     this.earTwitchLeft = Math.max(0, this.earTwitchLeft - dt * 8);
@@ -1062,6 +1092,21 @@ export class KuroCatEngine {
 
     const breath = Math.sin(this.elapsed * 2.1) * 1.0;
     const purrShift = this.squintAmount > 0.4 ? Math.sin(this.elapsed * 22) * 0.45 * this.squintAmount : 0;
+
+    if (this.catBreed === 'monokuma') {
+      const now = performance.now();
+      const layout = this.buildDaFeiYuLayout();
+      this.monokuma.renderBody(ctx, now, layout);
+      this.drawMiniMouse(ctx);
+      this.drawKeyboard(ctx);
+      this.monokuma.renderForeground(ctx, this.lastDt, now, layout);
+      if (this.showKeyBubbles && !this.privacyMode) {
+        this.drawKeyBubbles(ctx);
+        this.drawMouseBadges(ctx);
+      }
+      ctx.restore();
+      return;
+    }
 
     if (this.catBreed === 'dafeiyu') {
       const now = performance.now();
@@ -1863,7 +1908,12 @@ export class KuroCatEngine {
     const rxLbl = isCatFacing ? -7.4 : 7.4;
     const lyBase = isCatFacing ? 14.0 : -14.0;
     const pressDir = isCatFacing ? 0.9 : -0.9;
-    ctx.fillStyle = lPress > 0.12 ? '#14161a' : 'rgba(72, 76, 86, 0.56)';
+    ctx.fillStyle =
+      lPress > 0.12
+        ? this.catBreed === 'monokuma'
+          ? '#ffffff'
+          : '#14161a'
+        : 'rgba(72, 76, 86, 0.56)';
     ctx.fillText('L', lx, lyBase + lPress * pressDir);
     ctx.fillStyle = rPress > 0.12 ? '#ffffff' : 'rgba(72, 76, 86, 0.56)';
     ctx.fillText('R', rxLbl, lyBase + rPress * pressDir);
@@ -1950,18 +2000,22 @@ export class KuroCatEngine {
       if (press > 0.14) {
         topColor = this.customSkin
           ? this.customSkin.accentColor
-          : this.catBreed === 'dafeiyu'
-            ? '#5cc8ff'
-            : this.catBreed === 'ragdoll'
-              ? '#7ac7ff'
-              : '#d2f244';
+          : this.catBreed === 'monokuma'
+            ? DESPAIR_RED
+            : this.catBreed === 'dafeiyu'
+              ? '#5cc8ff'
+              : this.catBreed === 'ragdoll'
+                ? '#7ac7ff'
+                : '#d2f244';
         sideColor = this.customSkin
           ? this.customSkin.accentSideColor
-          : this.catBreed === 'dafeiyu'
-            ? '#2563eb'
-            : this.catBreed === 'ragdoll'
-              ? '#4690d8'
-              : '#8cb014';
+          : this.catBreed === 'monokuma'
+            ? DESPAIR_RED_DARK
+            : this.catBreed === 'dafeiyu'
+              ? '#2563eb'
+              : this.catBreed === 'ragdoll'
+                ? '#4690d8'
+                : '#8cb014';
       } else if (key.accent === 'orange') {
         topColor = '#f4a524';
         sideColor = '#c27a10';
@@ -2000,7 +2054,9 @@ export class KuroCatEngine {
         }
         ctx.font = `700 ${fontSize}px "Segoe UI", system-ui, sans-serif`;
         ctx.fillStyle = press > 0.14
-          ? '#111214'
+          ? this.catBreed === 'monokuma'
+            ? '#ffffff'
+            : '#111214'
           : key.accent === 'orange'
             ? '#ffffff'
             : '#2c2f36';
@@ -2017,15 +2073,23 @@ export class KuroCatEngine {
       ctx.fillStyle = 'rgba(15, 20, 32, 0.74)';
       this.trapezoidPath(ctx, topHalfW - 2, botHalfW - 2, -halfH + 1.5, halfH - 1.5, 5.5);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(244, 114, 182, 0.45)';
+      ctx.strokeStyle =
+        this.catBreed === 'monokuma'
+          ? 'rgba(230, 0, 18, 0.68)'
+          : 'rgba(244, 114, 182, 0.45)';
       ctx.lineWidth = 1.4;
       ctx.stroke();
       ctx.font = '700 11.5px "Segoe UI", "PingFang SC", sans-serif';
-      ctx.fillStyle = '#fbcfe8';
+      ctx.fillStyle = this.catBreed === 'monokuma' ? '#ffd4d9' : '#fbcfe8';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const dots = performance.now() - this.privacyTypingAt < 350 ? ' • • •' : '';
-      const label = this.catBreed === 'dafeiyu' ? '🔒 非礼勿视 · 已隐藏按键' : '🔒 密码输入中 · 已隐藏按键';
+      const label =
+        this.catBreed === 'monokuma'
+          ? '🔒 黑白熊遮眼 · 已隐藏按键'
+          : this.catBreed === 'dafeiyu'
+            ? '🔒 非礼勿视 · 已隐藏按键'
+            : '🔒 密码输入中 · 已隐藏按键';
       ctx.fillText(label + dots, 0, 0);
       ctx.restore();
     }
@@ -2444,24 +2508,33 @@ export class KuroCatEngine {
       const bx = -boxW / 2;
       const by = -boxH / 2;
 
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+      const isMonokuma = this.catBreed === 'monokuma' && !this.customSkin;
+      ctx.shadowColor = isMonokuma ? 'rgba(230, 0, 18, 0.28)' : 'rgba(0, 0, 0, 0.22)';
       ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 2;
 
-      ctx.fillStyle = '#c8cac6';
+      ctx.fillStyle = isMonokuma ? DESPAIR_RED : '#c8cac6';
       this.roundRect(ctx, bx, by + 2.2, boxW, boxH, 5.5);
       ctx.fill();
 
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = 'rgba(38, 40, 46, 0.42)';
-      ctx.lineWidth = 1.05;
+      ctx.strokeStyle = isMonokuma ? DESPAIR_RED : 'rgba(38, 40, 46, 0.42)';
+      ctx.lineWidth = isMonokuma ? 1.25 : 1.05;
       this.roundRect(ctx, bx, by, boxW, boxH - 1.3, 5.5);
       ctx.fill();
       ctx.stroke();
 
+      if (isMonokuma) {
+        // Subtle Danganronpa crimson accent dot on upper-right keycap corner
+        ctx.fillStyle = DESPAIR_RED;
+        ctx.beginPath();
+        ctx.arc(bx + boxW - 4.2, by + 4.0, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       if (b.isSpace) {
-        ctx.strokeStyle = '#222429';
+        ctx.strokeStyle = isMonokuma ? DESPAIR_RED : '#222429';
         ctx.lineWidth = 1.55;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -2472,7 +2545,7 @@ export class KuroCatEngine {
         ctx.lineTo(9, -1);
         ctx.stroke();
       } else {
-        ctx.fillStyle = '#1e2025';
+        ctx.fillStyle = isMonokuma ? '#18191d' : '#1e2025';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(b.label, 0, -0.5);
@@ -2523,7 +2596,11 @@ export class KuroCatEngine {
       ctx.stroke();
 
       ctx.font = '800 9.5px "Segoe UI", system-ui, sans-serif';
-      ctx.fillStyle = b.label === 'RMB' && b.color === '#ff7b3b' ? '#ffffff' : '#14161a';
+      const darkBadgeBg =
+        b.color === DESPAIR_RED ||
+        b.color === DESPAIR_RED_DARK ||
+        (b.label === 'RMB' && b.color === '#ff7b3b');
+      ctx.fillStyle = darkBadgeBg ? '#ffffff' : '#14161a';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(b.label, 0, -0.3);

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 fn default_cat_breed() -> String {
-    "black".to_string()
+    "monokuma".to_string()
 }
 
 fn default_mcp_enabled() -> bool {
